@@ -1,63 +1,46 @@
 import { invoke } from "@tauri-apps/api/core";
 import { openFileDialog, saveFileDialog } from "./dialogs";
+import { useEditorStore } from "@/store/editorStore";
 
-export interface FileData {
-  path: string;
-  content: string;
-  name: string;
-}
-
-export async function loadFile(): Promise<FileData | null> {
+export async function handleOpenFile() {
   const filePath = await openFileDialog();
-  if (!filePath) return null;
+  if (!filePath) return;
 
   try {
-    const content = await invoke<string>("open_file", {
-      path: filePath,
-    });
-
+    const content = await invoke<string>("open_file", { path: filePath });
     const fileName = filePath.split(/[\\/]/).pop() || "untitled.md";
 
-    return {
-      path: filePath,
-      content,
-      name: fileName,
-    };
+    // Update store
+    useEditorStore.getState().loadFile(filePath, content, fileName);
   } catch (error) {
-    console.error("Failed to load file: ", error);
-    throw new Error(`Failed to load file: ${error}`);
+    console.error("Failed to load file:", error);
+    throw error;
   }
 }
 
-export async function saveFileAs(
-  content: string,
-  currentPath?: string,
-): Promise<string | null> {
-  const defaultName = currentPath?.split(/[\\/]/).pop();
-
-  const savePath = await saveFileDialog(defaultName);
-  if (!savePath) return null;
+export async function handleSaveFile() {
+  const { filePath, content, setFilePath, setFileName, setHasUnsavedChanges } =
+    useEditorStore.getState();
 
   try {
-    await invoke("save_file", {
-      path: savePath,
-      content,
-    });
-    return savePath;
-  } catch (error) {
-    console.error("Failed to save file: ", error);
-    throw new Error(`Failed to save file: ${error}`);
-  }
-}
+    if (filePath) {
+      // Save to existing file
+      await invoke("save_file", { path: filePath, content });
+      setHasUnsavedChanges(false);
+    } else {
+      // Save as new file
+      const newPath = await saveFileDialog();
+      if (!newPath) return;
 
-export async function saveExistingFile(
-  path: string,
-  content: string,
-): Promise<void> {
-  try {
-    await invoke("save_file", { path, content });
+      await invoke("save_file", { path: newPath, content });
+
+      const newFileName = newPath.split(/[\\/]/).pop() || "untitled.md";
+      setFilePath(newPath);
+      setFileName(newFileName);
+      setHasUnsavedChanges(false);
+    }
   } catch (error) {
-    console.error("Failed to save file: ", error);
-    throw new Error(`Failed to save file: ${error}`);
+    console.error("Failed to save file:", error);
+    throw error;
   }
 }

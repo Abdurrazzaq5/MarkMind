@@ -1,29 +1,16 @@
-import { useState, useRef, useEffect } from "react";
+import { useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 
 import { once } from "@tauri-apps/api/event";
-import { saveExistingFile, saveFileAs } from "@/lib/fileOperations";
-// If you have a global store (e.g. useEditorStore), you could use it instead of local state:
-// import useEditorStore from '@/stores/editor';
+import { handleSaveFile } from "@/lib/fileOperations";
+import { useEditorStore } from "@/store/editorStore"; // <-- adjust path if your store lives elsewhere
 
 export default function MarkdownEditor() {
-  const [content, setContent] = useState("# Start writing...");
-  // Use local file path state or replace with your store's filePath/setFilePath
-  const [filePath, setFilePath] = useState<string | null>(null);
-
-  // refs to always have the latest values inside the event handler without re-subscribing
-  const contentRef = useRef(content);
-  const filePathRef = useRef(filePath);
-
-  useEffect(() => {
-    contentRef.current = content;
-  }, [content]);
-
-  useEffect(() => {
-    filePathRef.current = filePath;
-  }, [filePath]);
+  // Select only what you need from the store — component re-renders only when these values change
+  const content = useEditorStore((state) => state.content);
+  const setContent = useEditorStore((state) => state.setContent);
 
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -56,30 +43,18 @@ export default function MarkdownEditor() {
 
   useEffect(() => {
     // Register the listener using 'once' to handle a single save event.
-    // The handler reads current values from refs so it always acts on the latest content/filePath.
+    // When the shortcut triggers, call the centralized handleSaveFile()
+    // which uses the store's state (so we don't need separate refs for saving).
     let unlistenFn: (() => void) | null = null;
 
     (async () => {
       const unlisten = await once("save-triggered", async () => {
         try {
-          const currentPath = filePathRef.current;
-          const currentContent = contentRef.current;
-
-          if (currentPath) {
-            // save to existing file
-            await saveExistingFile(currentPath, currentContent);
-            console.log("File saved successfully");
-          } else {
-            // no file open — Save As
-            const newPath = await saveFileAs(currentContent);
-            if (newPath) {
-              setFilePath(newPath);
-              console.log("File saved as:", newPath);
-            }
-          }
+          await handleSaveFile();
+          console.log("File saved via handleSaveFile");
         } catch (error) {
           console.error("Save failed:", error);
-          // TODO: show a UI notification to the user
+          // TODO: surface a UI notification to the user
         }
       });
 
@@ -91,11 +66,12 @@ export default function MarkdownEditor() {
         try {
           unlistenFn();
         } catch (e) {
-          // ignore
+          // ignore cleanup errors
         }
       }
     };
-  }, [setFilePath]); // setFilePath stable; effect runs once
+    // Run once on mount; handleSaveFile reads from the store directly.
+  }, []);
 
   return (
     <div className="flex h-screen">
