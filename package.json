@@ -32,9 +32,11 @@
     "react-split-pane": "^3.0.4",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
-    "tailwind-merge": "^3.4.0"
+    "tailwind-merge": "^3.4.0",
+    "zustand": "^5.0.10"
   },
   "devDependencies": {
+    "@redux-devtools/extension": "^3.3.0",
     "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
